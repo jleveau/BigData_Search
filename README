@@ -1,0 +1,36 @@
+V1 
+yarn kmean.jar fichier.csv sortie nb_kmean num_colonne 
+
+num_colonne = quelle colonne utiliser pour faire le kmeans (exemple : population). -> doit etre des nombres réels
+nb_kmean = nb pivot au debut = nombre de cluster
+
+V2
+yarn kmean.jar fichier.csv sortie nb_kmean N num_colonne1 [num_colonne2] [num_colonne3] ...
+
+N -> hauteur
+
+appliquer les Kmeans de manière hierarchique : 
+On choisi le nombre de niveau sur lequel on veut decouper
+-> hauteur de l'arbre
+
+Objectif : generer 3 fichier 
+
+k0	label
+0	Paris = ville avec la population la plus haute				
+1	Amsterdam	
+2	Bordeaux
+
+k0	k1	label
+0	0
+0	2
+1	0
+1	1	
+1	2
+...
+
+k0	k1	k2	label
+0		
+1		
+2				
+
+Optimisation -> SequenceFile
