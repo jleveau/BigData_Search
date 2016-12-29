@@ -11,6 +11,5 @@ public interface kmeansInput {
 	
 	public void write(DataOutput arg0) throws IOException;
 
-	public int distance(Point2D o);
 	
 }

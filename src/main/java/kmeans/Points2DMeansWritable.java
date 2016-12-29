@@ -29,4 +29,9 @@ public class Points2DMeansWritable implements Writable, kmeansInput{
 		return 0;
 	}
 
+	public double distance(kmeansInput o) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
 }

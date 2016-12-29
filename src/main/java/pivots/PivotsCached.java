@@ -1,4 +1,4 @@
-package kmeans;
+package pivots;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -14,17 +14,15 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 
-public class SelectFromList  extends Configured implements Tool {
+public class PivotsCached  extends Configured implements Tool {
 
 	public int run(String[] args) throws Exception {
-        
        	Configuration conf = getConf();
-	    
 	
 		URI input_uri = new URI(args[0]);
-		URI output_uri = new URI("/pivots.txt");
-		Integer k = new Integer(args[2]);
-
+		URI output_uri = new URI("/resources/pivots");
+		Integer k = new Integer(args[1]);
+		
 		Job job = Job.getInstance(conf, "Kmeans");
 
 		FileSystem hdfs = FileSystem.get(input_uri,conf);
@@ -37,9 +35,18 @@ public class SelectFromList  extends Configured implements Tool {
         int i=0;
         
         while (i<k && (line = reader.readLine()) != null){
-            i++;
-            output.write(line.getBytes());
-            output.write("\n".getBytes());
+            String[] splits = line.split(",");
+            try {
+            	//Check if splits[4] is a valid double
+            	Double.parseDouble(splits[4]);
+            	output.write(splits[4].getBytes());
+            	output.write("\n".getBytes());
+            	i++;
+            }
+            catch(NumberFormatException e){
+            	
+            }
+            
         }
         
         reader.close();
@@ -47,10 +54,10 @@ public class SelectFromList  extends Configured implements Tool {
 
 		return 0;
 	}
-	
+
 	public static void main(String args[]) throws Exception {
 		//Take 3 parameters : input output k
-		System.exit(ToolRunner.run(new SelectFromList(), args));
+		System.exit(ToolRunner.run(new PivotsCached(), args));
 	}
 
 }
