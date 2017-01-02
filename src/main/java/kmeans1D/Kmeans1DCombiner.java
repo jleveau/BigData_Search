@@ -21,5 +21,4 @@ public class Kmeans1DCombiner extends Reducer<IntWritable,Kmeans1DCombinedWritab
 		}
 		context.write(pivot, combined_writable);
 	}
-	
 }

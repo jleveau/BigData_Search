@@ -13,9 +13,12 @@ public class Main {
 		int exitCode = -1;
 
 		try {
-			pgd.addClass("sequenced", PivotsSequenced.class, "select k pivots in a list of data and store it in a SequencedFile");
 			pgd.addClass("pivots", PivotsCached.class, "select k pivots in a list of data and store it in a file");
 		 	pgd.addClass("kmeans1D", kmeans1D.Kmeans1D.class, "Kmean with 1 dimension");
+		 	pgd.addClass("kmeansnD", kmeansnD.KmeansnD.class, "Kmean with n dimensions");
+		 //	pgd.addClass("kmeansnDHierar", KmeansnDHierar.KmeansnDHierar.class, "recursive Kmeans with depth h on n dimensions");
+
+
 		//	pgd.addClass("kmeans", kmeans.FindNewPivots.class, "compute pivots from subsets of data");
 			exitCode = pgd.run(args);
 		} catch (Throwable e1)  {

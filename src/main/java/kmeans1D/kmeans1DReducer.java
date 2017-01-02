@@ -5,7 +5,6 @@ import java.io.IOException;
 
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.Reducer;
 
 public class kmeans1DReducer extends Reducer<IntWritable,Kmeans1DCombinedWritable,IntWritable, DoubleWritable> 

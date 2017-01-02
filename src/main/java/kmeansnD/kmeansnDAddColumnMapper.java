@@ -8,68 +8,88 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+import kmeans1D.Kmeans1DEntry;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 
-public class KmeansnDMapper
-		extends
-		Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable> {
+public class kmeansnDAddColumnMapper extends
+		Mapper<LongWritable, Text, NullWritable, Text> {
 
-	int k;
 	ArrayList<Pivot> pivots;
-	ArrayList<Integer> columns;
-	IntWritable pivot_key_writable;
+	int k;
 	int dim;
+	Kmeans1DEntry pivot_writable;
+	Text text_writable;
+	NullWritable null_writable;
+	ArrayList<Integer> columns;
 
 
 	@Override
-	protected void map(
-			NullWritable key,
-			KmeansnDCombinedWritable value,
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+	protected void map(LongWritable key, Text value,
+			Mapper<LongWritable, Text, NullWritable, Text>.Context context)
 			throws IOException, InterruptedException {
-
+		
 		Iterator<Pivot> iterator;
 		iterator = pivots.iterator();
 
-		Pivot pivot = iterator.next();
-		double min_dist = pivot.distance(value.getCoordinates());
-		int min_index = 0;
-		int i = 1;
+		
+		String[] splits = value.toString().split(",");
 
+		// Read double in the line, at index defined in columns
+		ArrayList<Double> coordinates = new ArrayList<Double>();
+		try {
+			for (int i = 0; i < dim; ++i) {
+				coordinates.add(Double.parseDouble(splits[columns.get(i)]));
+			}
+		} catch (NumberFormatException e) {
+			return;
+		}
+
+		//Searching the index of nearest pivot
+		Pivot pivot = iterator.next();
+
+		double min_dist = pivot.distance(coordinates);
+		int min_index = pivots.get(0).getIndex();
+		
 		while (iterator.hasNext()) {
 			pivot = iterator.next();
-
-			double distance = pivot.distance(value.getCoordinates());
-
+			double distance = pivot.distance(coordinates);
 			if (distance < min_dist) {
 				min_dist = distance;
-				min_index = i;
+				min_index = pivot.getIndex();
 			}
-			++i;
 		}
 		
-		pivot_key_writable.set(min_index);
-		context.write(pivot_key_writable, value);
+		text_writable.set(value.toString() + "," + min_index);
+		context.write(null_writable, text_writable);
 	}
 
 	@Override
 	protected void setup(
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<LongWritable, Text, NullWritable, Text>.Context context)
 			throws IOException, InterruptedException {
 
+		null_writable = NullWritable.get();
+		text_writable = new Text();
+		
 		Configuration conf = context.getConfiguration();
 		FileSystem fs = FileSystem.get(conf);
 		pivots = new ArrayList<Pivot>();
-		pivot_key_writable = new IntWritable();
 
 		k = conf.getInt("pivots.number", 0);
 		dim = conf.getInt("pivots.dimension", 0);
+		columns = new ArrayList<Integer>();
+
+		// Define the index to read for coordinates
+		for (int i = 0; i < dim; i++) {
+			columns.add(new Integer(conf.getInt("pivots.column_number." + i, 0)));
+		}
 
 		// Test if pivot file exists
 		if (context.getCacheFiles().length == 0)
@@ -86,15 +106,20 @@ public class KmeansnDMapper
 
 		// Create pivots
 		for (int i = 0; i < k; ++i) {
+			Pivot p = new Pivot();
 			String line = reader.readLine();
 			try {
+				String[] splits_line = line.split("\t", -1);
+				p.setIndex(Integer.parseInt(splits_line[0]));
+
 				line = line.split("\t", -1)[1];
-				String[] splits = line.split(",");
+				String[] splits_coordinates = line.split(",");
 				ArrayList<Double> coordinates = new ArrayList<Double>();
 				for (int j = 0; j < dim; ++j) {
-					coordinates.add(Double.parseDouble(splits[j]));
+					coordinates.add(Double.parseDouble(splits_coordinates[j]));
 				}
-				pivots.add(new Pivot(coordinates));
+				p.setCoordinates(coordinates);
+				pivots.add(p);
 			} catch (NumberFormatException e) {
 
 			}

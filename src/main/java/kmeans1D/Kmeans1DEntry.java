@@ -1,14 +1,10 @@
 package kmeans1D;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 
 
-public class Kmeans1DEntry implements Writable{
+public class Kmeans1DEntry{
 		
 	DoubleWritable value;
 	Text line;
@@ -46,11 +42,6 @@ public class Kmeans1DEntry implements Writable{
 	public void setLine(Text line) {
 		this.line = line;
 	}
-
-	public void readFields(DataInput arg0) throws IOException {
-		value.readFields(arg0);
-		line.readFields(arg0);
-	}
 	
 	public int getId() {
 		return id;
@@ -58,11 +49,6 @@ public class Kmeans1DEntry implements Writable{
 	
 	public void setId(int id) {
 		this.id = id;
-	}
-
-	public void write(DataOutput arg0) throws IOException {
-		value.write(arg0);
-		line.write(arg0);
 	}
 
 	public double distance(double o) {
