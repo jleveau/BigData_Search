@@ -1,10 +1,10 @@
 
 package bigdata;
 
+
 import org.apache.hadoop.util.ProgramDriver;
 
 import pivots.PivotsCached;
-import pivots.PivotsSequenced;
 
 public class Main {
 	
@@ -16,7 +16,7 @@ public class Main {
 			pgd.addClass("pivots", PivotsCached.class, "select k pivots in a list of data and store it in a file");
 		 	pgd.addClass("kmeans1D", kmeans1D.Kmeans1D.class, "Kmean with 1 dimension");
 		 	pgd.addClass("kmeansnD", kmeansnD.KmeansnD.class, "Kmean with n dimensions");
-		 //	pgd.addClass("kmeansnDHierar", KmeansnDHierar.KmeansnDHierar.class, "recursive Kmeans with depth h on n dimensions");
+		 	pgd.addClass("kmeansnDHierar", kmeansnDHierar.KmeansnDHierar.class, "recursive Kmeans with depth h on n dimensions");
 
 
 		//	pgd.addClass("kmeans", kmeans.FindNewPivots.class, "compute pivots from subsets of data");

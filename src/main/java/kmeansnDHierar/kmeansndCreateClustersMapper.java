@@ -1,4 +1,4 @@
-package kmeansnD;
+package kmeansnDHierar;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,32 +8,34 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.Pivot;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;
 
-public class KmeansnDMapper
-		extends
-		Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable> {
+public class kmeansndCreateClustersMapper extends
+		Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable> {
 
-	int k;
-	ArrayList<Pivot> pivots;
+	KmeansnDCombinedWritable combined_writable;
+	int nb_dimensions;
 	ArrayList<Integer> columns;
-	IntWritable pivot_key_writable;
-	int dim;
-
-
+	NullWritable null_writable;
+	ArrayList<Pivot> pivots;
+	int k, dim;
+	MultipleOutputs<NullWritable, KmeansnDCombinedWritable> outputs;
+	
 	@Override
 	protected void map(
 			NullWritable key,
 			KmeansnDCombinedWritable value,
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
 			throws IOException, InterruptedException {
-
+		
 		Iterator<Pivot> iterator;
 		iterator = pivots.iterator();
 
@@ -53,23 +55,34 @@ public class KmeansnDMapper
 			}
 			++i;
 		}
-		pivot_key_writable.set(min_index);
-		context.write(pivot_key_writable, value);
+		value.getIndexes().add(min_index);
+
+		outputs.write(null_writable, value, Integer.toString(min_index));
+	}
+
+	@Override
+	protected void cleanup(
+			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
+			throws IOException, InterruptedException {
+		outputs.close();
 	}
 
 	@Override
 	protected void setup(
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
 			throws IOException, InterruptedException {
 
+		null_writable = NullWritable.get();
+		
 		Configuration conf = context.getConfiguration();
 		FileSystem fs = FileSystem.get(conf);
 		pivots = new ArrayList<Pivot>();
-		pivot_key_writable = new IntWritable();
 
 		k = conf.getInt("pivots.number", 0);
 		dim = conf.getInt("pivots.dimension", 0);
 
+		outputs = new MultipleOutputs<NullWritable, KmeansnDCombinedWritable>(context);
+		
 		// Test if pivot file exists
 		if (context.getCacheFiles().length == 0)
 			throw new IOException("No pivot file");
@@ -85,15 +98,20 @@ public class KmeansnDMapper
 
 		// Create pivots
 		for (int i = 0; i < k; ++i) {
+			Pivot p = new Pivot();
 			String line = reader.readLine();
 			try {
+				String[] splits_line = line.split("\t", -1);
+				p.setIndex(Integer.parseInt(splits_line[0]));
+
 				line = line.split("\t", -1)[1];
-				String[] splits = line.split(",");
+				String[] splits_coordinates = line.split(",");
 				ArrayList<Double> coordinates = new ArrayList<Double>();
 				for (int j = 0; j < dim; ++j) {
-					coordinates.add(Double.parseDouble(splits[j]));
+					coordinates.add(Double.parseDouble(splits_coordinates[j]));
 				}
-				pivots.add(new Pivot(coordinates));
+				p.setCoordinates(coordinates);
+				pivots.add(p);
 			} catch (NumberFormatException e) {
 
 			}

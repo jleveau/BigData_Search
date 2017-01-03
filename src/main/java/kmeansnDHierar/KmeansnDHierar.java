@@ -3,11 +3,15 @@ package kmeansnDHierar;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.SequenceFile.Reader;
+import org.apache.hadoop.mapreduce.lib.output.MapFileOutputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -15,6 +19,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
@@ -28,34 +33,43 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import kmeans.Kmeans;
-import kmeans1D.Kmeans1DAddColumnMapper;
+import kmeans1D.Kmeans1DCombiner;
+import kmeans1D.kmeans1DReducer;
+import kmeansnD.KmeansnD;
+import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.KmeansnDCombiner;
+import kmeansnD.KmeansnDMapper;
+import kmeansnD.kmeansnDAddColumnMapper;
+import kmeansnD.kmeansnDReducer;
 
-public class KmeansnD extends Configured implements Tool {
+public class KmeansnDHierar extends Configured implements Tool {
+
+	int k;
+	int depth;
 
 	public int run(String[] args) throws Exception, ClassNotFoundException,
 			InterruptedException {
 
 		Configuration conf = getConf();
-		String pivot_path;
 		Path input_path;
 		Path output_path;
-		Path input_path_start;
-		String base_path;
+
 		try {
 			input_path = new Path(args[0]);
 			output_path = new Path(args[1]);
-			base_path = new Path(args[1], "_iterations").toString();
-			conf.setInt("pivots.number", Integer.parseInt(args[2]));
-			input_path_start = input_path;
+			k = Integer.parseInt(args[2]);
+			depth = Integer.parseInt(args[3]);
+			conf.setInt("pivots.number", k);
+			conf.setInt("hierarchie.depth", depth);
 			int i;
-			for (i = 0; i < args.length - 3; ++i) {
+			for (i = 0; i < args.length - 4; ++i) {
 				conf.setInt("pivots.column_number." + i,
-						Integer.parseInt(args[i + 3]));
+						Integer.parseInt(args[i + 4]));
 			}
 			conf.setInt("pivots.dimension", i);
 		} catch (Exception e) {
 			System.err
-					.println(" bad arguments, [inputURI] [outputURI][nb_pivot][num_columns ...]");
+					.println(" bad arguments, [inputURI] [outputURI][nb_pivot][depth][num_columns ...]");
 			return -1;
 		}
 
@@ -65,14 +79,43 @@ public class KmeansnD extends Configured implements Tool {
 		fs.delete(output_path, true);
 		fs.mkdirs(output_path);
 
+		kmeans(input_path, output_path, conf, depth, 0);
+
+		return 0;
+	}
+
+	private void kmeans(Path input_path, Path output_path, Configuration conf,
+			int depth_acc, int k_acc) throws IOException, URISyntaxException,
+			IllegalArgumentException, ClassNotFoundException,
+			InterruptedException {
+
+		FileSystem fs = FileSystem.get(getConf());
+		
+		if (depth_acc == 0) {
+			System.out.println("stop recursion");
+			//Path result = new Path(output_path, "result");
+			//FileUtil.copyMerge(arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+			return;
+		}
+		System.out.println("start iteration for depth = " + depth_acc + " k = "
+				+ k_acc);
+		System.out.println("input path = " + input_path.toString());
+		System.out.println("output path = " + output_path.toString());
+
+		String pivot_path;
+		String base_path = new Path(output_path, "_iterations").toString();
+
 		// create initial pivot file
 		pivot_path = new Path(output_path, "starting_pivots").toString();
-		createPivots(input_path.toString(), pivot_path, new Integer(args[2]));
+		createPivots(input_path.toString(), pivot_path, k);
+
+		System.out.println("pivot path = " + pivot_path.toString());
 
 		// Copy input as SequenceFile
-		Path new_input_path = new Path(args[1], "input");
+		Path new_input_path = new Path(output_path, "input");
+		fs.delete(new_input_path, true);
 		copyAsSequenceFile(input_path, new_input_path);
-		input_path = new_input_path;
+		input_path = new Path(new_input_path, "part-m-00000");
 
 		int iteration = 0;
 
@@ -86,11 +129,12 @@ public class KmeansnD extends Configured implements Tool {
 		Path iteration_output_previous = new Path(base_path,
 				Integer.toString(iteration));
 		Path iteration_output_current;
-		if (!job.waitForCompletion(true))
-			return -1;
+		if (!job.waitForCompletion(false))
+			return;
 		long before = job.getCounters().findCounter("SUM", "after").getValue();
 		long after;
 
+		// Start iterations
 		boolean hasUpdates = true;
 		while (hasUpdates) {
 			++iteration;
@@ -110,8 +154,8 @@ public class KmeansnD extends Configured implements Tool {
 			job.getConfiguration().set("pivots.uri", pivot_path.toString());
 
 			// Start job
-			if (!job.waitForCompletion(true))
-				return -1;
+			if (!job.waitForCompletion(false))
+				return;
 
 			// compute end condition
 			after = job.getCounters().findCounter("SUM", "after").getValue();
@@ -121,14 +165,23 @@ public class KmeansnD extends Configured implements Tool {
 			before = after;
 			iteration_output_previous = iteration_output_current;
 		}
+		System.out.println("creating new clusters sequencefile");
+		// create new files for next clusters
+		Path output_for_cluster = new Path(output_path.toString(), "clusters_"
+				+ Integer.toString(k_acc) + "_" + Integer.toString(depth_acc));
+
+		createNewClustersFile(input_path, output_for_cluster, new Path(
+				iteration_output_previous.toString(), "part-r-00000"), k);
 
 		// Delete sequenceFile
-		fs.delete(input_path, true);
-		
-		//Adding cluster index
-		addColumn(input_path_start,new Path(output_path.toString(),"result") ,
-				new Path(iteration_output_previous.toString(),"part-r-00000"));
-		return 0;
+		fs.delete(input_path.getParent(), true);
+		fs.delete(new Path(base_path), true);
+
+		// Start new depth
+		for (int i = 0; i < k; ++i) {
+			kmeans(new Path(output_for_cluster.toString(), i + "-m-00000"),
+					output_path, conf, depth_acc - 1, i);
+		}
 	}
 
 	private Job updatePivotsJob(String pivot_path, int iteration)
@@ -154,6 +207,41 @@ public class KmeansnD extends Configured implements Tool {
 		job.setNumReduceTasks(1);
 		job.addCacheFile(new URI(pivot_path));
 		return job;
+	}
+
+	public void SequenceFileToText(String input_p, String output_p, int k)
+			throws URISyntaxException, IOException {
+
+		URI input_uri = new URI(input_p);
+		URI output_uri = new URI(output_p);
+
+		Configuration conf = getConf();
+		FileSystem hdfs = FileSystem.get(input_uri, conf);
+
+		OutputStream output = hdfs.create(new Path(output_uri));
+
+		SequenceFile.Reader reader = null;
+		reader = new SequenceFile.Reader(conf, Reader.file(new Path(input_p)));
+
+		NullWritable null_w = NullWritable.get();
+		KmeansnDCombinedWritable combined_w = new KmeansnDCombinedWritable();
+
+		int i = 0;
+		while (reader.next(null_w, combined_w)) {
+			output.write((i + "\t").getBytes());
+
+			for (int j = 0; j < combined_w.getCoordinates().size(); j++) {
+				output.write((Double.toString(combined_w.getCoordinates()
+						.get(j))).getBytes());
+				if (j != combined_w.getCoordinates().size() - 1)
+					output.write(",".getBytes());
+			}
+			output.write("\n".getBytes());
+			++i;
+		}
+
+		reader.close();
+		output.close();
 	}
 
 	public void createPivots(String input_p, String output_p, int k)
@@ -221,36 +309,41 @@ public class KmeansnD extends Configured implements Tool {
 		TextInputFormat.addInputPath(job, input);
 		SequenceFileOutputFormat.setOutputPath(job, output);
 
-		job.waitForCompletion(true);
+		job.waitForCompletion(false);
 	}
-	
-	private void addColumn(Path input_path, Path output_path, Path pivot_path) throws IOException, URISyntaxException, ClassNotFoundException, InterruptedException{
+
+	private void createNewClustersFile(Path input_path, Path output_path,
+			Path pivot_path, int k) throws IOException, URISyntaxException,
+			ClassNotFoundException, InterruptedException {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf);
 
 		job.setJarByClass(Kmeans.class);
 
-		job.setInputFormatClass(TextInputFormat.class);
+		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
 
 		job.setOutputKeyClass(NullWritable.class);
-		job.setOutputValueClass(Text.class);
+		job.setOutputValueClass(KmeansnDCombinedWritable.class);
 
-		job.setMapperClass(kmeansnDAddColumnMapper.class);
-		//job.setCombinerClass(Kmeans1DCombiner.class);
-		//job.setReducerClass(kmeans1DReducer.class);
-		
+		job.setMapperClass(kmeansndCreateClustersMapper.class);
+
 		TextInputFormat.addInputPath(job, input_path);
-	    SequenceFileOutputFormat.setOutputPath(job, output_path);
+		for (int i = 0; i < k; ++i) {
+			MultipleOutputs.addNamedOutput(job, Integer.toString(i),
+					SequenceFileOutputFormat.class, NullWritable.class,
+					KmeansnDCombinedWritable.class);
+		}
+		TextOutputFormat.setOutputPath(job, output_path);
 
 		job.setNumReduceTasks(1);
 		job.addCacheFile(new URI(pivot_path.toString()));
 		job.getConfiguration().set("pivots.uri", pivot_path.toString());
-		
-	    job.waitForCompletion(true);
+
+		job.waitForCompletion(true);
 	}
 
 	public static void main(String args[]) throws Exception {
-		System.exit(ToolRunner.run(new KmeansnD(), args));
+		System.exit(ToolRunner.run(new KmeansnDHierar(), args));
 	}
 }

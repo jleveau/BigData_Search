@@ -29,6 +29,7 @@ public class MapperCopyToSequenceFile extends
 
 		// Read double in the line, at index defined in columns
 		ArrayList<Double> coordinates = new ArrayList<Double>();
+		ArrayList<Integer> indexes = new ArrayList<Integer>();
 		try {
 			for (int i = 0; i < nb_dimensions; ++i) {
 				coordinates.add(Double.parseDouble(splits[columns.get(i)]));
@@ -36,7 +37,13 @@ public class MapperCopyToSequenceFile extends
 		} catch (NumberFormatException e) {
 			return;
 		}
+		
+		//Read int to retreive previous index 
+		for (int i=nb_dimensions; i<splits.length; ++i){
+			indexes.add(Integer.parseInt(splits[i]));
+		}
 
+		combined_writable.setIndexes(indexes);
 		combined_writable.setCoordinates(coordinates);
 		combined_writable.setNum(1);
 

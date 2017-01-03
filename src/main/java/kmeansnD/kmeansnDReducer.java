@@ -61,8 +61,6 @@ public class kmeansnDReducer extends Reducer<IntWritable,KmeansnDCombinedWritabl
 				builder.append(",");
 			context.getCounter("SUM", "after").increment((long) coordinates[i]);
 		}
-
-
 		//write
 		text_writable.set(builder.toString());
 
