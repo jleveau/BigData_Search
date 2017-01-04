@@ -37,13 +37,8 @@ public class MapperCopyToSequenceFile extends
 		} catch (NumberFormatException e) {
 			return;
 		}
-		
-		//Read int to retreive previous index 
-		for (int i=nb_dimensions; i<splits.length; ++i){
-			indexes.add(Integer.parseInt(splits[i]));
-		}
 
-		combined_writable.setIndexes(indexes);
+		combined_writable.setData(value.toString());
 		combined_writable.setCoordinates(coordinates);
 		combined_writable.setNum(1);
 

@@ -1,21 +1,34 @@
 package kmeansnDHierar;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+
+import kmeans.Kmeans;
+import kmeansnD.KmeansnD;
+import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.KmeansnDCombiner;
+import kmeansnD.KmeansnDMapper;
+import kmeansnD.kmeansnDReducer;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.SequenceFile;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.SequenceFile.Reader;
-import org.apache.hadoop.mapreduce.lib.output.MapFileOutputFormat;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
@@ -25,27 +38,11 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
-
-import kmeans.Kmeans;
-import kmeans1D.Kmeans1DCombiner;
-import kmeans1D.kmeans1DReducer;
-import kmeansnD.KmeansnD;
-import kmeansnD.KmeansnDCombinedWritable;
-import kmeansnD.KmeansnDCombiner;
-import kmeansnD.KmeansnDMapper;
-import kmeansnD.kmeansnDAddColumnMapper;
-import kmeansnD.kmeansnDReducer;
-
 public class KmeansnDHierar extends Configured implements Tool {
 
 	int k;
 	int depth;
+	private ArrayList<Path> cluster_out_paths;
 
 	public int run(String[] args) throws Exception, ClassNotFoundException,
 			InterruptedException {
@@ -53,6 +50,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		Configuration conf = getConf();
 		Path input_path;
 		Path output_path;
+		cluster_out_paths = new ArrayList<Path>();
 
 		try {
 			input_path = new Path(args[0]);
@@ -79,22 +77,23 @@ public class KmeansnDHierar extends Configured implements Tool {
 		fs.delete(output_path, true);
 		fs.mkdirs(output_path);
 
-		kmeans(input_path, output_path, conf, depth, 0);
+		kmeansHierar(input_path, output_path, conf, depth, 0);
 
+		mergefiles(cluster_out_paths, new Path(output_path, "result"));
+		//joinColumns(cluster_out_paths, new Path(output_path,"result"));
 		return 0;
 	}
 
-	private void kmeans(Path input_path, Path output_path, Configuration conf,
-			int depth_acc, int k_acc) throws IOException, URISyntaxException,
-			IllegalArgumentException, ClassNotFoundException,
-			InterruptedException {
+	private void kmeansHierar(Path input_path, Path output_path,
+			Configuration conf, int depth_acc, int k_acc) throws IOException,
+			URISyntaxException, IllegalArgumentException,
+			ClassNotFoundException, InterruptedException {
 
 		FileSystem fs = FileSystem.get(getConf());
-		
+
 		if (depth_acc == 0) {
 			System.out.println("stop recursion");
-			//Path result = new Path(output_path, "result");
-			//FileUtil.copyMerge(arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+			cluster_out_paths.add(input_path);
 			return;
 		}
 		System.out.println("start iteration for depth = " + depth_acc + " k = "
@@ -129,7 +128,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		Path iteration_output_previous = new Path(base_path,
 				Integer.toString(iteration));
 		Path iteration_output_current;
-		if (!job.waitForCompletion(false))
+		if (!job.waitForCompletion(true))
 			return;
 		long before = job.getCounters().findCounter("SUM", "after").getValue();
 		long after;
@@ -154,7 +153,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 			job.getConfiguration().set("pivots.uri", pivot_path.toString());
 
 			// Start job
-			if (!job.waitForCompletion(false))
+			if (!job.waitForCompletion(true))
 				return;
 
 			// compute end condition
@@ -179,7 +178,9 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 		// Start new depth
 		for (int i = 0; i < k; ++i) {
-			kmeans(new Path(output_for_cluster.toString(), i + "-m-00000"),
+			System.out.println("start new iteration");
+			kmeansHierar(
+					new Path(output_for_cluster.toString(), i + "-m-00000"),
 					output_path, conf, depth_acc - 1, i);
 		}
 	}
@@ -309,7 +310,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		TextInputFormat.addInputPath(job, input);
 		SequenceFileOutputFormat.setOutputPath(job, output);
 
-		job.waitForCompletion(false);
+		job.waitForCompletion(true);
 	}
 
 	private void createNewClustersFile(Path input_path, Path output_path,
@@ -339,6 +340,34 @@ public class KmeansnDHierar extends Configured implements Tool {
 		job.setNumReduceTasks(1);
 		job.addCacheFile(new URI(pivot_path.toString()));
 		job.getConfiguration().set("pivots.uri", pivot_path.toString());
+
+		job.waitForCompletion(true);
+	}
+	
+	public void mergefiles(ArrayList<Path> cluster_out_paths, Path output) throws IOException, ClassNotFoundException, InterruptedException{
+		Configuration conf = getConf();
+		Job job = Job.getInstance(conf);
+		
+		FileSystem hdfs = FileSystem.get(conf);
+		hdfs.delete(output, true);
+		
+		job.setJobName("MergeFiles");
+		job.setJarByClass(KmeansnD.class);
+
+		job.setMapperClass(copyMapper.class);
+		
+		job.setNumReduceTasks(1);
+
+		job.setOutputKeyClass(NullWritable.class);
+		job.setOutputValueClass(Text.class);
+
+		job.setInputFormatClass(TextInputFormat.class);
+		job.setOutputFormatClass(TextOutputFormat.class);
+
+		for (int i=0; i<cluster_out_paths.size(); ++i){
+			MultipleInputs.addInputPath(job, cluster_out_paths.get(i), TextInputFormat.class);
+		}
+		SequenceFileOutputFormat.setOutputPath(job, output);
 
 		job.waitForCompletion(true);
 	}

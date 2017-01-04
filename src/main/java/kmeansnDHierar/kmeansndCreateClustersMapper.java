@@ -55,7 +55,7 @@ public class kmeansndCreateClustersMapper extends
 			}
 			++i;
 		}
-		value.getIndexes().add(min_index);
+		value.addToData(Integer.toString(min_index));
 
 		outputs.write(null_writable, value, Integer.toString(min_index));
 	}
