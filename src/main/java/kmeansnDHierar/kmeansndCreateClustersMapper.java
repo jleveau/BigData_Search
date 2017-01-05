@@ -8,7 +8,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 
-import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.KmeansnDDataWritable;
 import kmeansnD.Pivot;
 
 import org.apache.hadoop.conf.Configuration;
@@ -19,21 +19,21 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;
 
 public class kmeansndCreateClustersMapper extends
-		Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable> {
+		Mapper<NullWritable, KmeansnDDataWritable, NullWritable, KmeansnDDataWritable> {
 
-	KmeansnDCombinedWritable combined_writable;
+	KmeansnDDataWritable combined_writable;
 	int nb_dimensions;
 	ArrayList<Integer> columns;
 	NullWritable null_writable;
 	ArrayList<Pivot> pivots;
 	int k, dim;
-	MultipleOutputs<NullWritable, KmeansnDCombinedWritable> outputs;
+	MultipleOutputs<NullWritable, KmeansnDDataWritable> outputs;
 	
 	@Override
 	protected void map(
 			NullWritable key,
-			KmeansnDCombinedWritable value,
-			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
+			KmeansnDDataWritable value,
+			Mapper<NullWritable, KmeansnDDataWritable, NullWritable, KmeansnDDataWritable>.Context context)
 			throws IOException, InterruptedException {
 		
 		Iterator<Pivot> iterator;
@@ -57,19 +57,19 @@ public class kmeansndCreateClustersMapper extends
 		}
 		value.addToData(Integer.toString(min_index));
 
-		outputs.write(null_writable, value, Integer.toString(min_index));
+		outputs.write(null_writable, value, Integer.toString(min_index)+"/part");
 	}
 
 	@Override
 	protected void cleanup(
-			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<NullWritable, KmeansnDDataWritable, NullWritable, KmeansnDDataWritable>.Context context)
 			throws IOException, InterruptedException {
 		outputs.close();
 	}
 
 	@Override
 	protected void setup(
-			Mapper<NullWritable, KmeansnDCombinedWritable, NullWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<NullWritable, KmeansnDDataWritable, NullWritable, KmeansnDDataWritable>.Context context)
 			throws IOException, InterruptedException {
 
 		null_writable = NullWritable.get();
@@ -81,7 +81,7 @@ public class kmeansndCreateClustersMapper extends
 		k = conf.getInt("pivots.number", 0);
 		dim = conf.getInt("pivots.dimension", 0);
 
-		outputs = new MultipleOutputs<NullWritable, KmeansnDCombinedWritable>(context);
+		outputs = new MultipleOutputs<NullWritable, KmeansnDDataWritable>(context);
 		
 		// Test if pivot file exists
 		if (context.getCacheFiles().length == 0)

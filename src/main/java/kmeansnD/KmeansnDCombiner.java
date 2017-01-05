@@ -1,6 +1,5 @@
 package kmeansnD;
 
-
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -9,21 +8,22 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.mapreduce.Reducer;
 
-
-
-public class KmeansnDCombiner extends Reducer<IntWritable,KmeansnDCombinedWritable,IntWritable, 
-												KmeansnDCombinedWritable>  {
+public class KmeansnDCombiner
+		extends
+		Reducer<IntWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable> {
 
 	KmeansnDCombinedWritable combined_writable;
 	int dim;
 
 	@Override
-	protected void reduce(IntWritable key, Iterable<KmeansnDCombinedWritable> values,
-			Reducer<IntWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+	protected void reduce(
+			IntWritable key,
+			Iterable<KmeansnDCombinedWritable > values,
+			Reducer<IntWritable, KmeansnDCombinedWritable , IntWritable, KmeansnDCombinedWritable >.Context context)
 			throws IOException, InterruptedException {
-				combined_writable = new KmeansnDCombinedWritable(dim);
+		combined_writable = new KmeansnDCombinedWritable (dim);
 
-		for (KmeansnDCombinedWritable val : values){
+		for (KmeansnDCombinedWritable  val : values) {
 			combined_writable.add(val);
 		}
 		context.write(key, combined_writable);
@@ -31,12 +31,12 @@ public class KmeansnDCombiner extends Reducer<IntWritable,KmeansnDCombinedWritab
 
 	@Override
 	protected void setup(
-			Reducer<IntWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			Reducer<IntWritable, KmeansnDCombinedWritable , IntWritable, KmeansnDCombinedWritable >.Context context)
 			throws IOException, InterruptedException {
-		
+
 		Configuration conf = context.getConfiguration();
 		dim = conf.getInt("pivots.dimension", 0);
 
 	}
-	
+
 }

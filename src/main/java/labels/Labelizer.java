@@ -5,7 +5,7 @@ import java.net.URI;
 import java.util.ArrayList;
 
 import kmeansnD.KmeansnD;
-import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.KmeansnDDataWritable;
 import kmeansnD.KmeansnDCombiner;
 import kmeansnD.KmeansnDMapper;
 import kmeansnD.kmeansnDReducer;
@@ -51,7 +51,6 @@ public class Labelizer extends Configured implements Tool {
 				conf.setInt("labels.class_column." + width,
 						Integer.parseInt(args[width + 4]));
 			}
-			conf.setInt("labels.nb_class_column", width);
 		} catch (Exception e) {
 			System.err
 					.println(" bad arguments, [inputURI][outputURI][label_col][measure_col][class columns ...]");
@@ -66,6 +65,7 @@ public class Labelizer extends Configured implements Tool {
 
 		while (width > 0){
 			labelize(input_path, output_path,width);
+			--width;
 		}
 		
 		return 0;
@@ -75,6 +75,8 @@ public class Labelizer extends Configured implements Tool {
 
 	private void labelize(Path input_path, Path output_path, int width) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = getConf();
+		conf.setInt("labels.nb_class_column", width);
+
 		Job job = Job.getInstance(conf, "labelize");
 
 		job.setJarByClass(Labelizer.class);
@@ -82,25 +84,23 @@ public class Labelizer extends Configured implements Tool {
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
 
-		job.setMapOutputKeyClass(IntWritable.class);
+		job.setMapOutputKeyClass(Text.class);
 		job.setMapOutputValueClass(LabelizerWritable.class);
 
 		job.setOutputKeyClass(NullWritable.class);
 		job.setOutputValueClass(Text.class);
 
 		job.setMapperClass(LabelizerMapper.class);
-		job.setCombinerClass(LabelizerCombiner.class);
+	//	job.setCombinerClass(LabelizerCombiner.class);
 		job.setReducerClass(LabelizerReducer.class);
-
-		job.setNumReduceTasks(1);
 		
+		job.setNumReduceTasks(1);
+	
 		FileInputFormat.addInputPath(job, input_path);
 		FileOutputFormat.setOutputPath(job, new Path(output_path, "out" + width));
 				
 		job.waitForCompletion(true);	
 	}
-
-
 
 	public static void main(String args[]) throws Exception {
 		System.exit(ToolRunner.run(new Labelizer(), args));

@@ -12,26 +12,26 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Mapper;
 
 public class KmeansnDMapper
 		extends
-		Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable> {
+		Mapper<NullWritable, KmeansnDDataWritable, IntWritable, KmeansnDCombinedWritable> {
 
 	int k;
 	ArrayList<Pivot> pivots;
 	ArrayList<Integer> columns;
 	IntWritable pivot_key_writable;
+	KmeansnDCombinedWritable combined_writable;
 	int dim;
 
 
 	@Override
 	protected void map(
 			NullWritable key,
-			KmeansnDCombinedWritable value,
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			KmeansnDDataWritable value,
+			Mapper<NullWritable, KmeansnDDataWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
 			throws IOException, InterruptedException {
 
 		Iterator<Pivot> iterator;
@@ -53,20 +53,24 @@ public class KmeansnDMapper
 			}
 			++i;
 		}
+
 		pivot_key_writable.set(min_index);
-		context.write(pivot_key_writable, value);
+		combined_writable.setCoordinates(value.getCoordinates());
+		combined_writable.setNum(1);
+		context.write(pivot_key_writable, combined_writable);
 	}
 
 	@Override
 	protected void setup(
-			Mapper<NullWritable, KmeansnDCombinedWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<NullWritable, KmeansnDDataWritable, IntWritable, KmeansnDCombinedWritable>.Context context)
 			throws IOException, InterruptedException {
 
 		Configuration conf = context.getConfiguration();
 		FileSystem fs = FileSystem.get(conf);
 		pivots = new ArrayList<Pivot>();
 		pivot_key_writable = new IntWritable();
-
+		combined_writable = new KmeansnDCombinedWritable();
+		
 		k = conf.getInt("pivots.number", 0);
 		dim = conf.getInt("pivots.dimension", 0);
 

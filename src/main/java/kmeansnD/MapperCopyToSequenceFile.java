@@ -10,9 +10,9 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 
 public class MapperCopyToSequenceFile extends
-		Mapper<LongWritable, Text, NullWritable, KmeansnDCombinedWritable> {
+		Mapper<LongWritable, Text, NullWritable, KmeansnDDataWritable> {
 
-	KmeansnDCombinedWritable combined_writable;
+	KmeansnDDataWritable combined_writable;
 	int nb_dimensions;
 	ArrayList<Integer> columns;
 	NullWritable null_writable;
@@ -21,7 +21,7 @@ public class MapperCopyToSequenceFile extends
 	protected void map(
 			LongWritable key,
 			Text value,
-			Mapper<LongWritable, Text, NullWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<LongWritable, Text, NullWritable, KmeansnDDataWritable>.Context context)
 			throws IOException, InterruptedException {
 
 		// Retrieve columns from the input
@@ -29,7 +29,6 @@ public class MapperCopyToSequenceFile extends
 
 		// Read double in the line, at index defined in columns
 		ArrayList<Double> coordinates = new ArrayList<Double>();
-		ArrayList<Integer> indexes = new ArrayList<Integer>();
 		try {
 			for (int i = 0; i < nb_dimensions; ++i) {
 				coordinates.add(Double.parseDouble(splits[columns.get(i)]));
@@ -47,10 +46,10 @@ public class MapperCopyToSequenceFile extends
 
 	@Override
 	protected void setup(
-			Mapper<LongWritable, Text, NullWritable, KmeansnDCombinedWritable>.Context context)
+			Mapper<LongWritable, Text, NullWritable, KmeansnDDataWritable>.Context context)
 			throws IOException, InterruptedException {
 
-		combined_writable = new KmeansnDCombinedWritable();
+		combined_writable = new KmeansnDDataWritable();
 		columns = new ArrayList<Integer>();
 		null_writable = NullWritable.get();
 

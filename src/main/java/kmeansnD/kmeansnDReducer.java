@@ -57,10 +57,13 @@ public class kmeansnDReducer extends Reducer<IntWritable,KmeansnDCombinedWritabl
 		for (int i=0; i<dim; ++i){
 			coordinates[i] /= num;
 			builder.append(Double.toString(coordinates[i]));
-			if (i != dim-1)
-				builder.append(",");
+			builder.append(",");
 			context.getCounter("SUM", "after").increment((long) coordinates[i]);
 		}
+
+		//remove last coma
+		builder.setLength(builder.length()-1);
+		
 		//write
 		text_writable.set(builder.toString());
 

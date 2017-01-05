@@ -27,7 +27,6 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import kmeans.Kmeans;
 import kmeans1D.Kmeans1DAddColumnMapper;
 
 public class KmeansnD extends Configured implements Tool {
@@ -142,7 +141,7 @@ public class KmeansnD extends Configured implements Tool {
 		job.setOutputFormatClass(TextOutputFormat.class);
 
 		job.setMapOutputKeyClass(IntWritable.class);
-		job.setMapOutputValueClass(KmeansnDCombinedWritable.class);
+		job.setMapOutputValueClass(KmeansnDDataWritable.class);
 
 		job.setOutputKeyClass(NullWritable.class);
 		job.setOutputValueClass(Text.class);
@@ -213,7 +212,7 @@ public class KmeansnD extends Configured implements Tool {
 		job.setNumReduceTasks(0);
 
 		job.setOutputKeyClass(NullWritable.class);
-		job.setOutputValueClass(KmeansnDCombinedWritable.class);
+		job.setOutputValueClass(KmeansnDDataWritable.class);
 
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
@@ -228,7 +227,7 @@ public class KmeansnD extends Configured implements Tool {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf);
 
-		job.setJarByClass(Kmeans.class);
+		job.setJarByClass(KmeansnD.class);
 
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);

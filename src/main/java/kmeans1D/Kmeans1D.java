@@ -28,8 +28,6 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import kmeans.Kmeans;
-
 public class Kmeans1D extends Configured implements Tool {
 
 	public int run(String[] args) throws Exception, ClassNotFoundException,
@@ -122,7 +120,7 @@ public class Kmeans1D extends Configured implements Tool {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf, "iteration_" + iteration);
 
-		job.setJarByClass(Kmeans.class);
+		job.setJarByClass(Kmeans1D.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
@@ -202,7 +200,7 @@ public class Kmeans1D extends Configured implements Tool {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf);
 
-		job.setJarByClass(Kmeans.class);
+		job.setJarByClass(Kmeans1D.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);

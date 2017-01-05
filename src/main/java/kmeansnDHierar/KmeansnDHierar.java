@@ -7,10 +7,12 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
-import kmeans.Kmeans;
 import kmeansnD.KmeansnD;
 import kmeansnD.KmeansnDCombinedWritable;
+import kmeansnD.KmeansnDDataWritable;
 import kmeansnD.KmeansnDCombiner;
 import kmeansnD.KmeansnDMapper;
 import kmeansnD.kmeansnDReducer;
@@ -77,44 +79,41 @@ public class KmeansnDHierar extends Configured implements Tool {
 		fs.delete(output_path, true);
 		fs.mkdirs(output_path);
 
-		kmeansHierar(input_path, output_path, conf, depth, 0);
+		kmeansHierar(input_path, output_path, input_path, conf, depth, 0, "");
 
 		mergefiles(cluster_out_paths, new Path(output_path, "result"));
-		//joinColumns(cluster_out_paths, new Path(output_path,"result"));
+		// joinColumns(cluster_out_paths, new Path(output_path,"result"));
 		return 0;
 	}
 
 	private void kmeansHierar(Path input_path, Path output_path,
-			Configuration conf, int depth_acc, int k_acc) throws IOException,
-			URISyntaxException, IllegalArgumentException,
-			ClassNotFoundException, InterruptedException {
+			Path src_pivot_path, Configuration conf, int depth_acc, int k_acc,
+			String list_k) throws IOException, URISyntaxException,
+			IllegalArgumentException, ClassNotFoundException,
+			InterruptedException {
 
 		FileSystem fs = FileSystem.get(getConf());
 
 		if (depth_acc == 0) {
-			System.out.println("stop recursion");
 			cluster_out_paths.add(input_path);
 			return;
 		}
-		System.out.println("start iteration for depth = " + depth_acc + " k = "
-				+ k_acc);
-		System.out.println("input path = " + input_path.toString());
-		System.out.println("output path = " + output_path.toString());
 
 		String pivot_path;
 		String base_path = new Path(output_path, "_iterations").toString();
 
 		// create initial pivot file
 		pivot_path = new Path(output_path, "starting_pivots").toString();
-		createPivots(input_path.toString(), pivot_path, k);
-
-		System.out.println("pivot path = " + pivot_path.toString());
+		if (!createPivots(src_pivot_path.toString(), pivot_path, k)) {
+			System.err.println("Not enough line for " + k + "clusters");
+			return;
+		}
 
 		// Copy input as SequenceFile
 		Path new_input_path = new Path(output_path, "input");
 		fs.delete(new_input_path, true);
 		copyAsSequenceFile(input_path, new_input_path);
-		input_path = new Path(new_input_path, "part-m-00000");
+		input_path = new_input_path;
 
 		int iteration = 0;
 
@@ -158,30 +157,33 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 			// compute end condition
 			after = job.getCounters().findCounter("SUM", "after").getValue();
-			if (Math.abs(after - before) < 1) {
+			if (Math.abs(after - before) < 0.1) {
 				hasUpdates = false;
 			}
 			before = after;
 			iteration_output_previous = iteration_output_current;
 		}
-		System.out.println("creating new clusters sequencefile");
 		// create new files for next clusters
-		Path output_for_cluster = new Path(output_path.toString(), "clusters_"
-				+ Integer.toString(k_acc) + "_" + Integer.toString(depth_acc));
+		Path output_for_cluster = new Path(output_path.toString(), "clusters"
+				+ list_k + "_" + k_acc);
 
 		createNewClustersFile(input_path, output_for_cluster, new Path(
 				iteration_output_previous.toString(), "part-r-00000"), k);
 
 		// Delete sequenceFile
-		fs.delete(input_path.getParent(), true);
+		fs.delete(input_path, true);
 		fs.delete(new Path(base_path), true);
 
 		// Start new depth
 		for (int i = 0; i < k; ++i) {
-			System.out.println("start new iteration");
+			System.out.println("clusters path : " + output_for_cluster.toString());
+			System.out.println("new pivots path : " + new Path(output_for_cluster.toString(),Integer.toString(i)+"/part-m-00000").toString());
 			kmeansHierar(
-					new Path(output_for_cluster.toString(), i + "-m-00000"),
-					output_path, conf, depth_acc - 1, i);
+					new Path(output_for_cluster.toString(), Integer.toString(i)),
+					output_path,
+					
+					new Path(output_for_cluster.toString(),Integer.toString(i)+"/part-m-00000")
+					,conf, depth_acc - 1, i, list_k + "_" + k_acc);
 		}
 	}
 
@@ -225,7 +227,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		reader = new SequenceFile.Reader(conf, Reader.file(new Path(input_p)));
 
 		NullWritable null_w = NullWritable.get();
-		KmeansnDCombinedWritable combined_w = new KmeansnDCombinedWritable();
+		KmeansnDDataWritable combined_w = new KmeansnDDataWritable();
 
 		int i = 0;
 		while (reader.next(null_w, combined_w)) {
@@ -245,7 +247,8 @@ public class KmeansnDHierar extends Configured implements Tool {
 		output.close();
 	}
 
-	public void createPivots(String input_p, String output_p, int k)
+	// return false if there is not enough line
+	public boolean createPivots(String input_p, String output_p, int k)
 			throws URISyntaxException, IOException {
 
 		URI input_uri = new URI(input_p);
@@ -256,37 +259,43 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 		BufferedReader reader = new BufferedReader(new InputStreamReader(
 				hdfs.open(new Path(input_uri))));
-		OutputStream output = hdfs.create(new Path(output_uri));
 
 		String line;
-		int i = 0;
 		StringBuilder sb = new StringBuilder();
+		Set<String> pivot_set = new HashSet<String>();
 
-		while (i < k && (line = reader.readLine()) != null) {
+		while (pivot_set.size() < k && (line = reader.readLine()) != null) {
 			try {
 				String[] splits = line.split(",");
 				sb.setLength(0);
 				int nb_col = conf.getInt("pivots.dimension", 0);
-				sb.append(i + "	");
 				for (int j = 0; j < nb_col; j++) {
 					int col = conf.getInt("pivots.column_number." + j, 0);
 					// Check if splits[col] is a valid double
 					Double.parseDouble(splits[col]);
 					sb.append(splits[col]);
-					if (j != nb_col - 1) {
-						sb.append(",");
-					}
+					sb.append(",");
 				}
+				sb.setLength(sb.length() - 1);
 				sb.append("\n");
-				output.write(sb.toString().getBytes());
-
-				i++;
+				pivot_set.add(sb.toString());
 			} catch (NumberFormatException e) {
 
 			}
 		}
+
+		if (pivot_set.size() < k)
+			return false;
+		OutputStream output = hdfs.create(new Path(output_uri));
+
+		int i = 0;
+		for (String s : pivot_set) {
+			output.write((i + "	" + s).getBytes());
+		}
+
 		reader.close();
 		output.close();
+		return true;
 	}
 
 	private void copyAsSequenceFile(Path input, Path output)
@@ -302,7 +311,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		job.setNumReduceTasks(0);
 
 		job.setOutputKeyClass(NullWritable.class);
-		job.setOutputValueClass(KmeansnDCombinedWritable.class);
+		job.setOutputValueClass(KmeansnDDataWritable.class);
 
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
@@ -319,13 +328,13 @@ public class KmeansnDHierar extends Configured implements Tool {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf);
 
-		job.setJarByClass(Kmeans.class);
+		job.setJarByClass(KmeansnDHierar.class);
 
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
 
 		job.setOutputKeyClass(NullWritable.class);
-		job.setOutputValueClass(KmeansnDCombinedWritable.class);
+		job.setOutputValueClass(KmeansnDDataWritable.class);
 
 		job.setMapperClass(kmeansndCreateClustersMapper.class);
 
@@ -333,7 +342,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 		for (int i = 0; i < k; ++i) {
 			MultipleOutputs.addNamedOutput(job, Integer.toString(i),
 					SequenceFileOutputFormat.class, NullWritable.class,
-					KmeansnDCombinedWritable.class);
+					KmeansnDDataWritable.class);
 		}
 		TextOutputFormat.setOutputPath(job, output_path);
 
@@ -343,19 +352,20 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 		job.waitForCompletion(true);
 	}
-	
-	public void mergefiles(ArrayList<Path> cluster_out_paths, Path output) throws IOException, ClassNotFoundException, InterruptedException{
+
+	public void mergefiles(ArrayList<Path> cluster_out_paths, Path output)
+			throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = getConf();
 		Job job = Job.getInstance(conf);
-		
+
 		FileSystem hdfs = FileSystem.get(conf);
 		hdfs.delete(output, true);
-		
+
 		job.setJobName("MergeFiles");
 		job.setJarByClass(KmeansnD.class);
 
 		job.setMapperClass(copyMapper.class);
-		
+
 		job.setNumReduceTasks(1);
 
 		job.setOutputKeyClass(NullWritable.class);
@@ -364,8 +374,9 @@ public class KmeansnDHierar extends Configured implements Tool {
 		job.setInputFormatClass(TextInputFormat.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
 
-		for (int i=0; i<cluster_out_paths.size(); ++i){
-			MultipleInputs.addInputPath(job, cluster_out_paths.get(i), TextInputFormat.class);
+		for (int i = 0; i < cluster_out_paths.size(); ++i) {
+			MultipleInputs.addInputPath(job, cluster_out_paths.get(i),
+					TextInputFormat.class);
 		}
 		SequenceFileOutputFormat.setOutputPath(job, output);
 
