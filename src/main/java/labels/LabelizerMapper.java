@@ -1,9 +1,11 @@
 package labels;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.LongWritable;
@@ -13,24 +15,26 @@ import org.apache.hadoop.mapreduce.Mapper;
 public class LabelizerMapper extends
 		Mapper<LongWritable, Text, Text, LabelizerWritable> {
 
-	HashMap<String, LabelizerWritable> labels_map;
-	int nb_class_col;
-	int measure_col;
-	int label_col;
-	int[] class_col;
-	StringBuilder builder;
-	Text key_writable;
+	private static HashMap<String, LabelizerWritable> labels_map;
+	private int nb_class_col;
+	private int measure_col;
+	private int label_col;
+	private int[] class_col;
+	private StringBuilder builder;
+	private Text text_w;
 
 	@Override
 	protected void cleanup(
 			Mapper<LongWritable, Text, Text, LabelizerWritable>.Context context)
 			throws IOException, InterruptedException {
+
 		Iterator<Entry<String, LabelizerWritable>> map_it = labels_map
 				.entrySet().iterator();
+
 		while (map_it.hasNext()) {
 			Entry<String, LabelizerWritable> entry = map_it.next();
-			key_writable.set(entry.getKey());
-			context.write(key_writable, entry.getValue());
+			text_w.set(entry.getKey());
+			context.write(text_w, entry.getValue());
 		}
 	}
 
@@ -45,7 +49,7 @@ public class LabelizerMapper extends
 
 		String[] splits = value.toString().split(",");
 
-		//Check if measure column exists
+		// Check if measure column exists
 		try {
 			measure = Double.parseDouble(splits[measure_col]);
 		} catch (NumberFormatException e) {
@@ -56,17 +60,22 @@ public class LabelizerMapper extends
 			builder.append(splits[class_col[i]]);
 			builder.append(" ");
 		}
+		builder.setLength(builder.length());
+
 		coordinates = builder.toString();
+
 		label = splits[label_col];
 
-		if (!labels_map.containsKey(coordinates)) {
-			labels_map.put(coordinates, new LabelizerWritable(label, measure));
-		} else {
+		if (labels_map.containsKey(coordinates)) {
 			LabelizerWritable writable = labels_map.get(coordinates);
+
 			if (writable.getMeasure().get() < measure) {
 				writable.getLabel().set(label);
 				writable.getMeasure().set(measure);
 			}
+		} else {
+			labels_map.put(coordinates, new LabelizerWritable(label, measure));
+
 		}
 	}
 
@@ -76,10 +85,10 @@ public class LabelizerMapper extends
 			throws IOException, InterruptedException {
 
 		builder = new StringBuilder();
+		text_w = new Text();
 
 		// Init data structures
 		labels_map = new HashMap<String, LabelizerWritable>();
-		key_writable = new Text();
 
 		// Retreive data from configuration
 		Configuration conf = context.getConfiguration();

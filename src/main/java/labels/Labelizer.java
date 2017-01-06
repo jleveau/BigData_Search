@@ -71,12 +71,10 @@ public class Labelizer extends Configured implements Tool {
 		return 0;
 	}
 	
-	
-
 	private void labelize(Path input_path, Path output_path, int width) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = getConf();
+		
 		conf.setInt("labels.nb_class_column", width);
-
 		Job job = Job.getInstance(conf, "labelize");
 
 		job.setJarByClass(Labelizer.class);
@@ -87,11 +85,11 @@ public class Labelizer extends Configured implements Tool {
 		job.setMapOutputKeyClass(Text.class);
 		job.setMapOutputValueClass(LabelizerWritable.class);
 
-		job.setOutputKeyClass(NullWritable.class);
-		job.setOutputValueClass(Text.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(LabelizerWritable.class);
 
+		job.setPartitionerClass(LabelizerPartitioner.class);
 		job.setMapperClass(LabelizerMapper.class);
-	//	job.setCombinerClass(LabelizerCombiner.class);
 		job.setReducerClass(LabelizerReducer.class);
 		
 		job.setNumReduceTasks(1);

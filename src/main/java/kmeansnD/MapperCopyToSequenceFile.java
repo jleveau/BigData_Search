@@ -36,7 +36,6 @@ public class MapperCopyToSequenceFile extends
 		} catch (NumberFormatException e) {
 			return;
 		}
-
 		combined_writable.setData(value.toString());
 		combined_writable.setCoordinates(coordinates);
 		combined_writable.setNum(1);

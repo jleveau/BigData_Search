@@ -11,7 +11,7 @@ public class Main {
 	public static void main( String[] args ) throws Exception {
 		ProgramDriver pgd = new ProgramDriver();
 		int exitCode = -1;
-
+	
 		try {
 		 	//Params : input output nb_cluster column
 			pgd.addClass("kmeans1D", kmeans1D.Kmeans1D.class, "Kmean with 1 dimension");

@@ -176,8 +176,6 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 		// Start new depth
 		for (int i = 0; i < k; ++i) {
-			System.out.println("clusters path : " + output_for_cluster.toString());
-			System.out.println("new pivots path : " + new Path(output_for_cluster.toString(),Integer.toString(i)+"/part-m-00000").toString());
 			kmeansHierar(
 					new Path(output_for_cluster.toString(), Integer.toString(i)),
 					output_path,
@@ -207,6 +205,8 @@ public class KmeansnDHierar extends Configured implements Tool {
 		job.setCombinerClass(KmeansnDCombiner.class);
 		job.setReducerClass(kmeansnDReducer.class);
 
+		//Set to 1 because there too few reduce tasks (setting to 0 use more time)
+	
 		job.setNumReduceTasks(1);
 		job.addCacheFile(new URI(pivot_path));
 		return job;
@@ -290,7 +290,7 @@ public class KmeansnDHierar extends Configured implements Tool {
 
 		int i = 0;
 		for (String s : pivot_set) {
-			output.write((i + "	" + s).getBytes());
+			output.write((i++ + "	" + s).getBytes());
 		}
 
 		reader.close();
